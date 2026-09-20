@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width,
+      initial-scale=1,
+      maximum-scale=1,
+      user-scalable=no,
+      viewport-fit=cover">
+
+<title>Jogo do Tutu</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(#e8f6ff, #ffffff);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: none;
+}
+
+.game {
+    width: 94vw;
+    max-width: 460px;
+    text-align: center;
+}
+
+h1 {
+    margin: 5px 0;
+    color: #1477d4;
+    font-size: 32px;
+}
+
+.subtitle {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.score {
+    font-size: 21px;
+    font-weight: bold;
+    margin: 7px;
+}
+
+canvas {
+    display: block;
+    width: min(90vw, 400px);
+    height: min(90vw, 400px);
+    margin: auto;
+
+    border: 5px solid #1477d4;
+    border-radius: 18px;
+
+    background: white;
+
+    touch-action: none;
+}
+
+.controls {
+    width: 240px;
+    margin: 13px auto 0;
+
+    display: grid;
+
+    grid-template-columns: 72px 72px 72px;
+    grid-template-rows: 60px 60px;
+
+    gap: 8px;
+
+    justify-content: center;
+}
+
+button {
+    border: 0;
+    border-radius: 18px;
+
+    background: #1477d4;
+    color: white;
+
+    font-size: 30px;
+    font-weight: bold;
+
+    box-shadow: 0 4px 0 #07549e;
+
+    touch-action: manipulation;
+
+    user-select: none;
+    -webkit-user-select: none;
+
+    cursor: pointer;
+}
+
+button:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #07549e;
+}
+
+#up {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+#left {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+#down {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+#right {
+    grid-column: 3;
+    grid-row: 2;
+}
+
+#restart {
+    margin-top: 14px;
+
+    padding: 11px 23px;
+
+    font-size: 18px;
+
+    background: #0b9b4b;
+
+    box-shadow: 0 4px 0 #087338;
+}
+
+.message {
+    min-height: 24px;
+    margin-top: 8px;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="game">
+
+    <h1>💙 Jogo do Tutu</h1>
+
+    <div class="subtitle">
+        🐍 Cobrinha Azul
+    </div>
+
+    <div class="score">
+        Pontos:
+        <span id="score">0</span>
+        ⭐
+    </div>
+
+    <canvas
+        id="game"
+        width="400"
+        height="400">
+    </canvas>
+
+    <div class="controls">
+
+        <button id="up" type="button">
+            ⬆️
+        </button>
+
+        <button id="left" type="button">
+            ⬅️
+        </button>
+
+        <button id="down" type="button">
+            ⬇️
+        </button>
+
+        <button id="right" type="button">
+            ➡️
+        </button>
+
+    </div>
+
+    <button id="restart" type="button">
+        🔄 Jogar de novo
+    </button>
+
+    <div class="message" id="message">
+        Pegue as estrelinhas! ⭐
+    </div>
+
+</div>
+
+<script>
+
+const canvas = document.getElementById("game");
+
+const ctx = canvas.getContext("2d");
+
+const scoreElement =
+    document.getElementById("score");
+
+const messageElement =
+    document.getElementById("message");
+
+
+/* CONFIGURAÇÕES */
+
+const GRID = 20;
+
+const TILE = 20;
+
+/*
+   190 = velocidade mais tranquila.
+   Quanto maior o número,
+   mais devagar fica.
+*/
+const SPEED = 190;
+
+
+/* VARIÁVEIS */
+
+let snake;
+
+let food;
+
+let direction;
+
+let nextDirection;
+
+let score;
+
+let gameOver;
+
+let gameTimer;
+
+
+/* INICIAR */
+
+function startGame() {
+
+    snake = [
+        { x: 10, y: 10 },
+        { x: 9, y: 10 },
+        { x: 8, y: 10 }
+    ];
+
+    direction = {
+        x: 1,
+        y: 0
+    };
+
+    nextDirection = {
+        x: 1,
+        y: 0
+    };
+
+    score = 0;
+
+    gameOver = false;
+
+    scoreElement.textContent = "0";
+
+    messageElement.textContent =
+        "Pegue as estrelinhas! ⭐";
+
+    createFood();
+
+    clearInterval(gameTimer);
+
+    gameTimer =
+        setInterval(gameLoop, SPEED);
+
+    draw();
+}
+
+
+/* CRIAR COMIDA */
+
+function createFood() {
+
+    do {
+
+        food = {
+            x: Math.floor(Math.random() * GRID),
+            y: Math.floor(Math.random() * GRID)
+        };
+
+    } while (
+        snake.some(
+            part =>
+                part.x === food.x &&
+                part.y === food.y
+        )
+    );
+}
+
+
+/* MUDAR DIREÇÃO */
+
+function changeDirection(x, y) {
+
+    /*
+       Não deixa a cobra virar
+       diretamente para trás.
+    */
+
+    if (
+        x === -direction.x &&
+        y === -direction.y
+    ) {
+        return;
+    }
+
+    nextDirection = {
+        x: x,
+        y: y
+    };
+}
+
+
+/* MOVIMENTO */
+
+function gameLoop() {
+
+    if (gameOver) {
+        return;
+    }
+
+    direction = nextDirection;
+
+    let newHead = {
+
+        x: snake[0].x + direction.x,
+
+        y: snake[0].y + direction.y
+
+    };
+
+
+    /*
+       Se sair de um lado,
+       aparece no outro.
+    */
+
+    if (newHead.x < 0) {
+        newHead.x = GRID - 1;
+    }
+
+    if (newHead.x >= GRID) {
+        newHead.x = 0;
+    }
+
+    if (newHead.y < 0) {
+        newHead.y = GRID - 1;
+    }
+
+    if (newHead.y >= GRID) {
+        newHead.y = 0;
+    }
+
+
+    /*
+       Bateu no próprio corpo.
+    */
+
+    if (
+        snake.some(
+            part =>
+                part.x === newHead.x &&
+                part.y === newHead.y
+        )
+    ) {
+
+        finishGame();
+
+        return;
+    }
+
+
+    snake.unshift(newHead);
+
+
+    /*
+       Pegou a estrela.
+    */
+
+    if (
+        newHead.x === food.x &&
+        newHead.y === food.y
+    ) {
+
+        score++;
+
+        scoreElement.textContent =
+            score;
+
+        messageElement.textContent =
+            "Muito bem! ⭐";
+
+        createFood();
+
+    } else {
+
+        snake.pop();
+
+    }
+
+
+    draw();
+}
+
+
+/* FIM */
+
+function finishGame() {
+
+    gameOver = true;
+
+    clearInterval(gameTimer);
+
+    messageElement.textContent =
+        "Fim de jogo! 💙";
+
+    draw(true);
+}
+
+
+/* DESENHAR */
+
+function draw(showGameOver = false) {
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    /*
+       Fundo quadriculado.
+    */
+
+    for (
+        let y = 0;
+        y < GRID;
+        y++
+    ) {
+
+        for (
+            let x = 0;
+            x < GRID;
+            x++
+        ) {
+
+            if (
+                (x + y) % 2 === 0
+            ) {
+
+                ctx.fillStyle =
+                    "#f8fcff";
+
+            } else {
+
+                ctx.fillStyle =
+                    "#eef8ff";
+            }
+
+            ctx.fillRect(
+                x * TILE,
+                y * TILE,
+                TILE,
+                TILE
+            );
+        }
+    }
+
+
+    /*
+       Estrela.
+    */
+
+    drawStar(
+        food.x * TILE + 10,
+        food.y * TILE + 10,
+        8
+    );
+
+
+    /*
+       Cobra.
+    */
+
+    snake.forEach(
+        (part, index) => {
+
+            const px =
+                part.x * TILE + 2;
+
+            const py =
+                part.y * TILE + 2;
+
+
+            if (index === 0) {
+
+                ctx.fillStyle =
+                    "#0877e8";
+
+            } else {
+
+                ctx.fillStyle =
+                    "#1595ff";
+            }
+
+
+            roundRect(
+                px,
+                py,
+                16,
+                16,
+                6
+            );
+
+            ctx.fill();
+
+
+            /*
+               Olhos.
+            */
+
+            if (index === 0) {
+
+                ctx.fillStyle =
+                    "white";
+
+                ctx.beginPath();
+
+                ctx.arc(
+                    px + 5,
+                    py + 5,
+                    3,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.arc(
+                    px + 11,
+                    py + 5,
+                    3,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+
+
+                ctx.fillStyle =
+                    "#111";
+
+                ctx.beginPath();
+
+                ctx.arc(
+                    px + 5,
+                    py + 5,
+                    1.3,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.arc(
+                    px + 11,
+                    py + 5,
+                    1.3,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+            }
+        }
+    );
+
+
+    /*
+       Mensagem de fim.
+    */
+
+    if (showGameOver) {
+
+        ctx.fillStyle =
+            "rgba(255,255,255,.85)";
+
+        ctx.fillRect(
+            35,
+            150,
+            330,
+            100
+        );
+
+        ctx.fillStyle =
+            "#1477d4";
+
+        ctx.font =
+            "bold 27px Arial";
+
+        ctx.textAlign =
+            "center";
+
+        ctx.fillText(
+            "Vamos tentar de novo! 💙",
+            200,
+            205
+        );
+    }
+}
+
+
+/* RETÂNGULO ARREDONDADO */
+
+function roundRect(
+    x,
+    y,
+    width,
+    height,
+    radius
+) {
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        x + radius,
+        y
+    );
+
+    ctx.arcTo(
+        x + width,
+        y,
+        x + width,
+        y + height,
+        radius
+    );
+
+    ctx.arcTo(
+        x + width,
+        y + height,
+        x,
+        y + height,
+        radius
+    );
+
+    ctx.arcTo(
+        x,
+        y + height,
+        x,
+        y,
+        radius
+    );
+
+    ctx.arcTo(
+        x,
+        y,
+        x + width,
+        y,
+        radius
+    );
+
+    ctx.closePath();
+}
+
+
+/* ESTRELA */
+
+function drawStar(
+    centerX,
+    centerY,
+    radius
+) {
+
+    ctx.fillStyle =
+        "#ffd21f";
+
+    ctx.beginPath();
+
+    for (
+        let i = 0;
+        i < 10;
+        i++
+    ) {
+
+        const angle =
+            -Math.PI / 2 +
+            i * Math.PI / 5;
+
+        const r =
+            i % 2 === 0
+                ? radius
+                : radius * 0.45;
+
+        const x =
+            centerX +
+            Math.cos(angle) * r;
+
+        const y =
+            centerY +
+            Math.sin(angle) * r;
+
+        if (i === 0) {
+
+            ctx.moveTo(x, y);
+
+        } else {
+
+            ctx.lineTo(x, y);
+        }
+    }
+
+    ctx.closePath();
+
+    ctx.fill();
+}
+
+
+/*
+==================================================
+CORREÇÃO PARA IPHONE / IPAD
+==================================================
+
+Usamos Pointer Events + Touch Events.
+
+Isso evita que o Safari trate o toque
+das setas como rolagem ou gesto.
+*/
+
+function setupButton(
+    id,
+    x,
+    y
+) {
+
+    const button =
+        document.getElementById(id);
+
+
+    function press(event) {
+
+        event.preventDefault();
+
+        changeDirection(x, y);
+    }
+
+
+    button.addEventListener(
+        "pointerdown",
+        press,
+        {
+            passive: false
+        }
+    );
+
+
+    button.addEventListener(
+        "touchstart",
+        press,
+        {
+            passive: false
+        }
+    );
+}
+
+
+/* SETAS */
+
+setupButton(
+    "up",
+    0,
+    -1
+);
+
+setupButton(
+    "down",
+    0,
+    1
+);
+
+setupButton(
+    "left",
+    -1,
+    0
+);
+
+setupButton(
+    "right",
+    1,
+    0
+);
+
+
+/*
+==================================================
+BOTÃO JOGAR DE NOVO
+==================================================
+*/
+
+const restartButton =
+    document.getElementById("restart");
+
+
+restartButton.addEventListener(
+    "pointerdown",
+    function(event) {
+
+        event.preventDefault();
+
+        startGame();
+
+    },
+    {
+        passive: false
+    }
+);
+
+
+/*
+==================================================
+TECLADO
+==================================================
+*/
+
+document.addEventListener(
+    "keydown",
+    function(event) {
+
+        if (
+            event.key === "ArrowUp"
+        ) {
+
+            changeDirection(0, -1);
+
+        }
+
+        if (
+            event.key === "ArrowDown"
+        ) {
+
+            changeDirection(0, 1);
+
+        }
+
+        if (
+            event.key === "ArrowLeft"
+        ) {
+
+            changeDirection(-1, 0);
+
+        }
+
+        if (
+            event.key === "ArrowRight"
+        ) {
+
+            changeDirection(1, 0);
+
+        }
+
+    }
+);
+
+
+/*
+==================================================
+DESLIZAR O DEDO NA TELA
+==================================================
+*/
+
+let startX = 0;
+
+let startY = 0;
+
+
+canvas.addEventListener(
+    "touchstart",
+    function(event) {
+
+        const touch =
+            event.changedTouches[0];
+
+        startX =
+            touch.clientX;
+
+        startY =
+            touch.clientY;
+
+    },
+    {
+        passive: true
+    }
+);
+
+
+canvas.addEventListener(
+    "touchend",
+    function(event) {
+
+        const touch =
+            event.changedTouches[0];
+
+        const differenceX =
+            touch.clientX - startX;
+
+        const differenceY =
+            touch.clientY - startY;
+
+
+        if (
+            Math.max(
+                Math.abs(differenceX),
+                Math.abs(differenceY)
+            ) < 20
+        ) {
+
+            return;
+        }
+
+
+        if (
+            Math.abs(differenceX) >
+            Math.abs(differenceY)
+        ) {
+
+            if (differenceX > 0) {
+
+                changeDirection(1, 0);
+
+            } else {
+
+                changeDirection(-1, 0);
+            }
+
+        } else {
+
+            if (differenceY > 0) {
+
+                changeDirection(0, 1);
+
+            } else {
+
+                changeDirection(0, -1);
+            }
+        }
+
+    },
+    {
+        passive: true
+    }
+);
+
+
+/* COMEÇAR */
+
+startGame();
+
+</script>
+
+</body>
+  </html>
